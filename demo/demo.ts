@@ -30,25 +30,92 @@ import {
 } from '../src';
 import { tableEditing, columnResizing, tableNodes, fixTables } from '../src';
 
-const schema = new Schema({
-  nodes: baseSchema.spec.nodes.append(
-    tableNodes({
-      tableGroup: 'block',
-      cellContent: 'block+',
-      cellAttributes: {
-        background: {
-          default: null,
-          getFromDOM(dom) {
-            return dom.style.backgroundColor || null;
-          },
-          setDOMAttr(value, attrs) {
-            if (value)
-              attrs.style = (attrs.style || '') + `background-color: ${value};`;
-          },
-        },
+const tableNodeSpecs = tableNodes({
+  tableGroup: 'block',
+  cellContent: 'block+',
+  cellAttributes: {
+    background: {
+      default: null,
+      getFromDOM(dom) {
+        return dom.style.backgroundColor || null;
       },
-    }),
-  ),
+      setDOMAttr(value, attrs) {
+        if (value)
+          attrs.style = (attrs.style || '') + `background-color: ${value};`;
+      },
+    },
+  },
+});
+
+const nodeSpecs = baseSchema.spec.nodes.append(tableNodeSpecs);
+
+const updatedNodes = nodeSpecs.append({
+  table_inline_cell: {
+    ...tableNodeSpecs.table_cell,
+    inline: true,
+    content: 'inline+',
+  },
+});
+
+const tableCellNode = updatedNodes.get('table_cell');
+if (tableCellNode && tableCellNode.parseDOM) {
+  tableCellNode.parseDOM = tableCellNode.parseDOM.map(({ tag, getAttrs }) => {
+    return {
+      tag,
+      getAttrs: (dom: HTMLElement) => {
+        if (!getAttrs) return null;
+
+        const { firstChild } = dom;
+        if (firstChild && firstChild.nodeType === Node.TEXT_NODE) {
+          console.log(
+            'Inside table_cell(parse for Block) - But its a text node, so returning false',
+          );
+          return false;
+        } else {
+          console.log(
+            'Inside table_cell(parse for Block) - Its not a text node, so parsing it',
+            dom,
+          );
+          const attrs = getAttrs(dom);
+          return attrs;
+        }
+      },
+    };
+  });
+}
+
+const tableCellInlineNode = updatedNodes.get('table_inline_cell');
+if (tableCellInlineNode && tableCellInlineNode.parseDOM) {
+  tableCellInlineNode.parseDOM = tableCellInlineNode.parseDOM.map(
+    ({ tag, getAttrs }) => {
+      return {
+        tag,
+        getAttrs: (dom: HTMLElement) => {
+          if (!getAttrs) return null;
+
+          const { firstChild } = dom;
+          if (firstChild && firstChild.nodeType !== Node.TEXT_NODE) {
+            console.log(
+              'Inside table_cell(parse for Inline) - But its not a text node, returning false',
+            );
+            return false;
+          } else {
+            console.log(
+              'Inside table_cell(parse for Inline) - Its a text node, so parsing it',
+              dom,
+            );
+
+            const attrs = getAttrs(dom);
+            return attrs;
+          }
+        },
+      };
+    },
+  );
+}
+
+const schema = new Schema({
+  nodes: updatedNodes,
   marks: baseSchema.spec.marks,
 });
 
